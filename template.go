@@ -17,8 +17,8 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/tools/imports"
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/imports"
 )
 
 var testingMode = false
@@ -407,11 +407,12 @@ func (t *template) instantiate() {
 	if len(p.GoFiles) == 0 {
 		fatalf("No go files found for package '%s'", t.Package)
 	}
-	// FIXME
-	if len(p.GoFiles) != 1 {
-		fatalf("Found more than one go file in '%s' - can only cope with 1 for the moment, sorry", t.Package)
+	//// FIXME
+	//if len(p.GoFiles) != 1 {
+	//	fatalf("Found more than one go file in '%s' - can only cope with 1 for the moment, sorry", t.Package)
+	//}
+	for _, v := range p.GoFiles {
+		templateFilePath := path.Join(p.Dir, v)
+		t.parse(templateFilePath)
 	}
-
-	templateFilePath := path.Join(p.Dir, p.GoFiles[0])
-	t.parse(templateFilePath)
 }

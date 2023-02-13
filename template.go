@@ -189,6 +189,83 @@ func replaceIdentifier(f *ast.File, info *types.Info, old types.Object, new stri
 	}
 }
 
+// isTestDecl check ast.Decl is testing func by containing testing parameter
+func isTestDecl(decl ast.Decl) (is bool) {
+	switch d := decl.(type) {
+	case *ast.FuncDecl:
+		if d.Type == nil || d.Type.Params == nil {
+			return
+		}
+		if len(d.Type.Params.List) == 0 {
+			return
+		}
+		for _, l := range d.Type.Params.List {
+			testingStar, ok0 := l.Type.(*ast.StarExpr)
+			if !ok0 {
+				return
+			}
+			selExpr, ok1 := testingStar.X.(*ast.SelectorExpr)
+			if !ok1 {
+				return
+			}
+			ident, ok2 := selExpr.X.(*ast.Ident)
+			if !ok2 {
+				return
+			}
+			is = ident.Name == "testing"
+		}
+	}
+	return
+}
+
+func rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string) {
+	b := new(bytes.Buffer)
+	formatFunc := func() {
+		b.Reset()
+		if err := format.Node(b, fset, f); err != nil {
+			fatalf("Failed to format output: %v", err)
+		}
+		bts, err := imports.Process(outputFileName, b.Bytes(), nil)
+		if err != nil {
+			fatalf("Cannot fix imports: %v", err)
+		}
+		b.Reset()
+		if _, err := b.Write(bts); err != nil {
+			fatalf("Cannot write output: %v", err)
+		}
+	}
+
+	formatFunc()
+
+	fset, f = parseFile(outputFileName, genHeader+b.String())
+
+	formatFunc()
+
+	write := true
+
+	var curr []byte
+	if !testingMode {
+		var err error
+		curr, err = ioutil.ReadFile(outputFileName)
+		if err != nil && !os.IsNotExist(err) {
+			fatalf("Cannot open existing file: %v", err)
+		}
+	}
+
+	if bytes.Equal(curr, b.Bytes()) {
+		write = false
+	}
+
+	if write {
+		err := ioutil.WriteFile(outputFileName, b.Bytes(), 0666)
+		if err != nil {
+			fatalf("Unable to write to %q: %v", outputFileName, err)
+		}
+	}
+
+	debugf("Written '%s'", outputFileName)
+}
+
 // Parses the template file
 func (t *template) parse(inputFile string) {
 	t.inputFile = inputFile
@@ -220,6 +297,7 @@ func (t *template) parse(inputFile string) {
 	// Find names which need to be adjusted
 	namesToMangle := map[types.Object]string{}
 	newDecls := []ast.Decl{}
+	var hasTestingFunc bool
 	for _, decl := range f.Decls {
 		remove := false
 		switch d := decl.(type) {
@@ -292,6 +370,9 @@ func (t *template) parse(inputFile string) {
 			} else if d.Name.Name == "init" {
 				// Init function - ignore this function
 			} else {
+				if !hasTestingFunc && isTestDecl(d) {
+					hasTestingFunc = true
+				}
 				//debugf("FuncDecl = %#v", d)
 				debugf("FuncDecl = %s", d.Name.Name)
 				def := info.Defs[d.Name]
@@ -340,55 +421,27 @@ func (t *template) parse(inputFile string) {
 
 	// Output but only if contents have changed from existing file
 
-	b := new(bytes.Buffer)
-	outputFileName := fmt.Sprintf(*outfile+".go", t.Name)
-
-	format := func() {
-		b.Reset()
-		if err := format.Node(b, fset, f); err != nil {
-			fatalf("Failed to format output: %v", err)
+	var decls, testDecls []ast.Decl
+	if hasTestingFunc {
+		for _, decl := range f.Decls {
+			if isTestDecl(decl) {
+				testDecls = append(testDecls, decl)
+			} else {
+				decls = append(decls, decl)
+			}
 		}
-		bts, err := imports.Process(outputFileName, b.Bytes(), nil)
-		if err != nil {
-			fatalf("Cannot fix imports: %v", err)
-		}
-		b.Reset()
-		if _, err := b.Write(bts); err != nil {
-			fatalf("Cannot write output: %v", err)
-		}
+		// remove testing function
+		f.Decls = decls
 	}
 
-	format()
+	rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", t.Name))
 
-	// bit gross to inject the header this way... but in the spirit of
-	// minimal changes et al...
-	fset, f = parseFile(outputFileName, genHeader+b.String())
-
-	format()
-
-	write := true
-
-	var curr []byte
-	if !testingMode {
-		var err error
-		curr, err = ioutil.ReadFile(outputFileName)
-		if err != nil && !os.IsNotExist(err) {
-			fatalf("Cannot open existing file: %v", err)
-		}
+	if len(testDecls) > 0 {
+		// remove other comments
+		f.Comments = nil
+		f.Decls = testDecls
+		rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", t.Name))
 	}
-
-	if bytes.Equal(curr, b.Bytes()) {
-		write = false
-	}
-
-	if write {
-		err := ioutil.WriteFile(outputFileName, b.Bytes(), 0666)
-		if err != nil {
-			fatalf("Unable to write to %q: %v", outputFileName, err)
-		}
-	}
-
-	debugf("Written '%s'", outputFileName)
 }
 
 // Instantiate the template package
@@ -407,10 +460,10 @@ func (t *template) instantiate() {
 	if len(p.GoFiles) == 0 {
 		fatalf("No go files found for package '%s'", t.Package)
 	}
-	//// FIXME
-	//if len(p.GoFiles) != 1 {
-	//	fatalf("Found more than one go file in '%s' - can only cope with 1 for the moment, sorry", t.Package)
-	//}
+	// FIXME
+	if len(p.GoFiles) != 1 {
+		fatalf("Found more than one go file in '%s' - can only cope with 1 for the moment, sorry", t.Package)
+	}
 	for _, v := range p.GoFiles {
 		templateFilePath := path.Join(p.Dir, v)
 		t.parse(templateFilePath)

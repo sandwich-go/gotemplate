@@ -266,6 +266,74 @@ func rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string) {
 	debugf("Written '%s'", outputFileName)
 }
 
+func isTestImport(imp *ast.ImportSpec) (is bool) {
+	if imp == nil {
+		return
+	}
+	if imp.Path.Value == "\"testing\"" {
+		is = true
+		return
+	}
+	if imp.Name != nil {
+		if imp.Name.Name == "." && imp.Path.Value == "\"github.com/smartystreets/goconvey/convey\"" {
+			is = true
+		}
+	}
+	return
+}
+
+func arrangeDecl(decl ast.Decl) (testDecl, genDecl ast.Decl) {
+	genDecl = decl
+	switch d := decl.(type) {
+	case *ast.FuncDecl:
+		if d.Type == nil || d.Type.Params == nil {
+			return
+		}
+		if len(d.Type.Params.List) == 0 {
+			return
+		}
+		for _, l := range d.Type.Params.List {
+			testingStar, ok0 := l.Type.(*ast.StarExpr)
+			if !ok0 {
+				return
+			}
+			selExpr, ok1 := testingStar.X.(*ast.SelectorExpr)
+			if !ok1 {
+				return
+			}
+			ident, ok2 := selExpr.X.(*ast.Ident)
+			if !ok2 {
+				return
+			}
+			if ident.Name == "testing" {
+				testDecl = decl
+				genDecl = nil
+			}
+		}
+	case *ast.GenDecl:
+		switch d.Tok {
+		case token.IMPORT:
+			var is, tis []ast.Spec
+			for _, im := range d.Specs {
+				if isTestImport(im.(*ast.ImportSpec)) {
+					tis = append(tis, im)
+				} else {
+					is = append(is, im)
+				}
+			}
+			if len(tis) > 0 {
+				cd := *d
+				cd.Specs = tis
+				d.Specs = is
+				testDecl = &cd
+				genDecl = d
+			}
+			return
+		}
+	}
+	return
+}
+
 // Parses the template file
 func (t *template) parse(inputFile string) {
 	t.inputFile = inputFile
@@ -424,10 +492,12 @@ func (t *template) parse(inputFile string) {
 	var decls, testDecls []ast.Decl
 	if hasTestingFunc {
 		for _, decl := range f.Decls {
-			if isTestDecl(decl) {
-				testDecls = append(testDecls, decl)
-			} else {
-				decls = append(decls, decl)
+			testDecl, genDecl := arrangeDecl(decl)
+			if testDecl != nil {
+				testDecls = append(testDecls, testDecl)
+			}
+			if genDecl != nil {
+				decls = append(decls, genDecl)
 			}
 		}
 		// remove testing function

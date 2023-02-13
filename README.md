@@ -18,7 +18,7 @@ Install
 
 Install using go get
 
-    go get github.com/ncw/gotemplate/...
+    go get github.com/sandwich-go/gotemplate/...
 
 and this will build the `gotemplate` binary in `$GOPATH/bin`.
 

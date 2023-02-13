@@ -8,13 +8,13 @@ import "fmt"
 // Regenerate the templates with "go generate"
 
 // Sort strings using the less function
-//go:generate gotemplate -outfmt gen_%v_gotemplate "github.com/ncw/gotemplate/sort" "Sort(string, less)"
+//go:generate gotemplate -outfmt gen_%v_gotemplate "github.com/sandwich-go/gotemplate/sort" "Sort(string, less)"
 
 // Sort floats using the lt function
-//go:generate gotemplate "github.com/ncw/gotemplate/sort" "SortF(float64, lt)"
+//go:generate gotemplate "github.com/sandwich-go/gotemplate/sort" "SortF(float64, lt)"
 
 // Sort strings strings using the function passed in
-//go:generate gotemplate "github.com/ncw/gotemplate/sort" "SortGt(string, func(a, b string) bool { return a > b })"
+//go:generate gotemplate "github.com/sandwich-go/gotemplate/sort" "SortGt(string, func(a, b string) bool { return a > b })"
 
 func less(a, b string) bool {
 	return a < b
@@ -32,7 +32,7 @@ func main() {
 	SortGt(s)
 	fmt.Println(s)
 
-	f := []float64{0.1, -1.6, 1.5, +9, -8, 0.01, 1E99}
+	f := []float64{0.1, -1.6, 1.5, +9, -8, 0.01, 1e99}
 	fmt.Println(f)
 	SortF(f)
 	fmt.Println(f)

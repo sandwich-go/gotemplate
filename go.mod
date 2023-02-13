@@ -1,4 +1,4 @@
-module github.com/ncw/gotemplate
+module github.com/sandwich-go/gotemplate
 
 go 1.17
 

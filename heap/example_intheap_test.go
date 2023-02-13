@@ -8,7 +8,7 @@ package heap_test
 import (
 	"fmt"
 
-	"github.com/ncw/gotemplate/heap"
+	"github.com/sandwich-go/gotemplate/heap"
 )
 
 // This example inserts several ints into an IntHeap, checks the minimum,

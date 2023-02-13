@@ -7,7 +7,7 @@ import "fmt"
 //
 // Renerate the templates with "go generate"
 //
-//go:generate gotemplate "github.com/ncw/gotemplate/set" mySet(string)
+//go:generate gotemplate "github.com/sandwich-go/gotemplate/set" mySet(string)
 func main() {
 	s := newMySet()
 	s.Add("Sausage")

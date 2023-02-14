@@ -122,8 +122,18 @@ func parseTemplateAndArgs(s string) (name string, args []string) {
 	return
 }
 
-// "template type Set(A)"
-var matchTemplateType = regexp.MustCompile(`^//\s*template\s+type\s+(\w+\s*.*?)\s*$`)
+var (
+	matchTemplateType = regexp.MustCompile(`^//\s*template\s+type\s+(\w+\s*.*?)\s*$`)
+	matchFirstCap     = regexp.MustCompile("(.)([A-Z][a-z]+)")
+	matchAllCap       = regexp.MustCompile("([a-z0-9])([A-Z])")
+	matchFormat       = regexp.MustCompile(`^//\s*template\s+format\s*$`)
+)
+
+func snakeCase(str string) string {
+	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
+	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
+	return strings.ToLower(snake)
+}
 
 func (t *template) findTemplateDefinition(f *ast.File) {
 	// Inspect the comments
@@ -266,18 +276,18 @@ func rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string) {
 	debugf("Written '%s'", outputFileName)
 }
 
+var testingsMapping = map[string]struct{}{
+	"\"testing\"": {},
+	"\"github.com/smartystreets/goconvey/convey\"": {},
+}
+
 func isTestImport(imp *ast.ImportSpec) (is bool) {
-	if imp == nil {
+	if imp == nil || imp.Path == nil {
 		return
 	}
-	if imp.Path.Value == "\"testing\"" {
+	if _, ok := testingsMapping[imp.Path.Value]; ok {
 		is = true
 		return
-	}
-	if imp.Name != nil {
-		if imp.Name.Name == "." && imp.Path.Value == "\"github.com/smartystreets/goconvey/convey\"" {
-			is = true
-		}
 	}
 	return
 }
@@ -497,6 +507,7 @@ func (t *template) parse(inputFile string) {
 				testDecls = append(testDecls, testDecl)
 			}
 			if genDecl != nil {
+				t.reviseIfSpecialDecl(genDecl)
 				decls = append(decls, genDecl)
 			}
 		}
@@ -504,13 +515,31 @@ func (t *template) parse(inputFile string) {
 		f.Decls = decls
 	}
 
-	rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", t.Name))
+	rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", snakeCase(t.Name)))
 
 	if len(testDecls) > 0 {
 		// remove other comments
 		f.Comments = nil
 		f.Decls = testDecls
-		rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", t.Name))
+		rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", snakeCase(t.Name)))
+	}
+}
+
+func (t *template) reviseIfSpecialDecl(decl ast.Decl) {
+	switch v := decl.(type) {
+	case *ast.GenDecl:
+		if v.Doc == nil || len(v.Doc.List) == 0 {
+			return
+		}
+		for _, cm := range v.Doc.List {
+			if matches := matchFormat.FindStringSubmatch(cm.Text); len(matches) > 0 {
+				if formatFunc := getFormatFunc(t.Args[0]); formatFunc != nil {
+					v.Specs[0].(*ast.ValueSpec).Type = nil
+					v.Specs[0].(*ast.ValueSpec).Values = append(v.Specs[0].(*ast.ValueSpec).Values, formatFunc)
+				}
+				break
+			}
+		}
 	}
 }
 

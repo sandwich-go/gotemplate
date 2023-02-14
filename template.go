@@ -29,17 +29,19 @@ const (
 
 // Holds the desired template
 type template struct {
-	Package         string
-	Name            string
-	Args            []string
-	NewPackage      string
-	Dir             string
-	templateName    string
-	templateArgs    []string
-	templateArgsMap map[string]string
-	mappings        map[types.Object]string
-	newIsPublic     bool
-	inputFile       string
+	Package           string
+	Name              string
+	Args              []string
+	NewPackage        string
+	Dir               string
+	templateName      string
+	templateArgs      []string
+	templateArgsMap   map[string]string
+	mappings          map[types.Object]string
+	newIsPublic       bool
+	inputFile         string
+	formatFunc        string
+	replaceFormatFunc string
 }
 
 // findPackageName reads all the go packages in the curent directory
@@ -228,7 +230,7 @@ func isTestDecl(decl ast.Decl) (is bool) {
 	return
 }
 
-func rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string) {
+func (t *template) rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string, isTest bool) {
 	b := new(bytes.Buffer)
 	formatFunc := func() {
 		b.Reset()
@@ -247,7 +249,11 @@ func rewriteFile(fset *token.FileSet, f *ast.File, outputFileName string) {
 
 	formatFunc()
 
-	fset, f = parseFile(outputFileName, genHeader+b.String())
+	var ss = b.String()
+	if !isTest && len(t.formatFunc) > 0 {
+		ss = strings.ReplaceAll(ss, t.formatFunc, t.replaceFormatFunc)
+	}
+	fset, f = parseFile(outputFileName, genHeader+ss)
 
 	formatFunc()
 
@@ -500,11 +506,25 @@ func (t *template) parse(inputFile string) {
 	// Output but only if contents have changed from existing file
 
 	var decls, testDecls []ast.Decl
+	var testComments []*ast.CommentGroup
+	var getComment = func(decl ast.Decl) {
+		switch v := decl.(type) {
+		case *ast.GenDecl:
+			if v.Doc != nil {
+				testComments = append(testComments, v.Doc)
+			}
+		case *ast.FuncDecl:
+			if v.Doc != nil {
+				testComments = append(testComments, v.Doc)
+			}
+		}
+	}
 	if hasTestingFunc {
 		for _, decl := range f.Decls {
 			testDecl, genDecl := arrangeDecl(decl)
 			if testDecl != nil {
 				testDecls = append(testDecls, testDecl)
+				getComment(testDecl)
 			}
 			if genDecl != nil {
 				t.reviseIfSpecialDecl(genDecl)
@@ -513,15 +533,35 @@ func (t *template) parse(inputFile string) {
 		}
 		// remove testing function
 		f.Decls = decls
+
+		// remove test comments
+		if len(testComments) > 0 {
+			var comments = make([]*ast.CommentGroup, 0, len(f.Comments))
+			for _, j := range f.Comments {
+				var remove bool
+				for _, td := range testComments {
+					if j == td {
+						remove = true
+						break
+					}
+				}
+				if !remove {
+					comments = append(comments, j)
+				}
+			}
+			if len(comments) != len(f.Comments) {
+				f.Comments = comments
+			}
+		}
 	}
 
-	rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", snakeCase(t.Name)))
+	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", snakeCase(t.Name)), false)
 
 	if len(testDecls) > 0 {
 		// remove other comments
 		f.Comments = nil
 		f.Decls = testDecls
-		rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", snakeCase(t.Name)))
+		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", snakeCase(t.Name)), true)
 	}
 }
 
@@ -533,9 +573,14 @@ func (t *template) reviseIfSpecialDecl(decl ast.Decl) {
 		}
 		for _, cm := range v.Doc.List {
 			if matches := matchFormat.FindStringSubmatch(cm.Text); len(matches) > 0 {
-				if formatFunc := getFormatFunc(t.Args[0]); formatFunc != nil {
-					v.Specs[0].(*ast.ValueSpec).Type = nil
-					v.Specs[0].(*ast.ValueSpec).Values = append(v.Specs[0].(*ast.ValueSpec).Values, formatFunc)
+				if formatFunc := getFormatFunc(t.Args[0]); len(formatFunc) > 0 {
+					b := new(bytes.Buffer)
+					err := format.Node(b, token.NewFileSet(), v.Specs[0].(*ast.ValueSpec))
+					if err != nil {
+						fatalf("Format error for template type '%s', %v", t.templateName, err)
+					}
+					t.formatFunc = b.String()
+					t.replaceFormatFunc = strings.Split(t.formatFunc, " ")[0] + " = " + formatFunc
 				}
 				break
 			}

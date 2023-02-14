@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"go/ast"
-	"go/parser"
 	template2 "html/template"
 	"strings"
 )
@@ -60,9 +58,9 @@ const formatTPL = `func(i interface{}) {{ .Type }} {
 	}
 }`
 
-var formatFuncs map[string]*ast.FuncLit
+var formatFuncs map[string]string
 
-func getFormatFunc(t string) *ast.FuncLit {
+func getFormatFunc(t string) string {
 	return formatFuncs[strings.ToLower(t)]
 }
 
@@ -71,7 +69,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	formatFuncs = make(map[string]*ast.FuncLit)
+	formatFuncs = make(map[string]string)
 	for _, v := range []struct {
 		Type     string
 		Unsigned bool
@@ -85,10 +83,6 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		f, err0 := parser.ParseExpr(buf.String())
-		if err0 != nil {
-			panic(err0)
-		}
-		formatFuncs[v.Type] = f.(*ast.FuncLit)
+		formatFuncs[v.Type] = buf.String()
 	}
 }

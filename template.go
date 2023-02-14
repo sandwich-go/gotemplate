@@ -29,19 +29,18 @@ const (
 
 // Holds the desired template
 type template struct {
-	Package           string
-	Name              string
-	Args              []string
-	NewPackage        string
-	Dir               string
-	templateName      string
-	templateArgs      []string
-	templateArgsMap   map[string]string
-	mappings          map[types.Object]string
-	newIsPublic       bool
-	inputFile         string
-	formatFunc        string
-	replaceFormatFunc string
+	Package         string
+	Name            string
+	Args            []string
+	NewPackage      string
+	Dir             string
+	templateName    string
+	templateArgs    []string
+	templateArgsMap map[string]string
+	mappings        map[types.Object]string
+	newIsPublic     bool
+	inputFile       string
+	formatFuncs     map[string]string
 }
 
 // findPackageName reads all the go packages in the curent directory
@@ -65,6 +64,7 @@ func newTemplate(dir, pkg, templateArgsString string) *template {
 		mappings:        make(map[types.Object]string),
 		NewPackage:      findPackageName(),
 		templateArgsMap: make(map[string]string),
+		formatFuncs:     make(map[string]string),
 	}
 }
 
@@ -250,8 +250,10 @@ func (t *template) rewriteFile(fset *token.FileSet, f *ast.File, outputFileName 
 	formatFunc()
 
 	var ss = b.String()
-	if !isTest && len(t.formatFunc) > 0 {
-		ss = strings.ReplaceAll(ss, t.formatFunc, t.replaceFormatFunc)
+	if !isTest && len(t.formatFuncs) > 0 {
+		for k, v := range t.formatFuncs {
+			ss = strings.ReplaceAll(ss, k, v)
+		}
 	}
 	fset, f = parseFile(outputFileName, genHeader+ss)
 
@@ -571,16 +573,25 @@ func (t *template) reviseIfSpecialDecl(decl ast.Decl) {
 		if v.Doc == nil || len(v.Doc.List) == 0 {
 			return
 		}
+		if len(v.Specs) == 0 || v.Specs[0] == nil || v.Specs[0].(*ast.ValueSpec).Type == nil ||
+			v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results == nil || len(v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List) == 0 ||
+			v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List[0].Type == nil {
+			return
+		}
+		if len(v.Specs) == 0 || len(v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List) == 0 {
+			return
+		}
+		name := v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List[0].Type.(*ast.Ident).Name
 		for _, cm := range v.Doc.List {
 			if matches := matchFormat.FindStringSubmatch(cm.Text); len(matches) > 0 {
-				if formatFunc := getFormatFunc(t.Args[0]); len(formatFunc) > 0 {
+				if formatFunc := getFormatFunc(name); len(formatFunc) > 0 {
 					b := new(bytes.Buffer)
 					err := format.Node(b, token.NewFileSet(), v.Specs[0].(*ast.ValueSpec))
 					if err != nil {
 						fatalf("Format error for template type '%s', %v", t.templateName, err)
 					}
-					t.formatFunc = b.String()
-					t.replaceFormatFunc = strings.Split(t.formatFunc, " ")[0] + " = " + formatFunc
+					txt := b.String()
+					t.formatFuncs[txt] = strings.Split(txt, " ")[0] + " = " + formatFunc
 				}
 				break
 			}

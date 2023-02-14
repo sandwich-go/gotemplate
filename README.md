@@ -182,6 +182,30 @@ the instantiated template.
 
 All test files are ignored.
 
+Test
+-----------------
+含有 `testing.T` 参数的函数，均会生成在 `testing` 文件中
+
+`//template format` 表示该函数为参数格式化函数，格式化函数格式为 
+```go
+//template type Set(A)
+
+...
+
+//template format
+var __formatTo func(interface{}) A
+```
+
+其中 `__formatTo` 为格式化函数前缀，可以自定义
+
+`testing` 中即可使用该函数，将参数转化为 `A` 类型
+```go
+s := NewSet()
+// 参数3即可转化为Set中对应类型参数
+// 例如Set中A类型为string，则参数3会转化为"3"
+s.Add(__formatTo(3))
+```
+
 Bugs
 ----
 

@@ -7,13 +7,17 @@ import (
 )
 
 const formatTPL = `func(i interface{}) {{ .Type }} {
-	switch ii := i.(type) {
 {{- if eq .Type "string" }}
+	switch ii := i.(type) {
 	case string:
 		return ii
 	default:
 		return fmt.Sprintf("%d", i)
+	}
+{{- else if eq .Type "interface{}" }}
+	return i
 {{- else }}
+	switch ii := i.(type) {
 	case int:
 		return {{ .Type }}(ii)
 	case int8:
@@ -54,8 +58,8 @@ const formatTPL = `func(i interface{}) {{ .Type }} {
 		return {{ .Type }}(iv)
 	default:
 		panic("unknown type")
-{{- end }}
 	}
+{{- end }}
 }`
 
 var formatFuncs map[string]string
@@ -76,7 +80,7 @@ func init() {
 	}{
 		{Type: "int"}, {Type: "int8"}, {Type: "int16"}, {Type: "int32"}, {Type: "int64"},
 		{Type: "uint", Unsigned: true}, {Type: "uint8", Unsigned: true}, {Type: "uint16", Unsigned: true}, {Type: "uint32", Unsigned: true}, {Type: "uint64", Unsigned: true},
-		{Type: "string"}, {Type: "float32"}, {Type: "float64"},
+		{Type: "string"}, {Type: "float32"}, {Type: "float64"}, {Type: "interface{}"},
 	} {
 		buf := bytes.NewBuffer(nil)
 		err = t.Execute(buf, v)

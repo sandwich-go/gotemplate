@@ -573,8 +573,16 @@ func (t *template) reviseIfSpecialDecl(decl ast.Decl) {
 		if v.Doc == nil || len(v.Doc.List) == 0 {
 			return
 		}
-		if len(v.Specs) == 0 || v.Specs[0] == nil || v.Specs[0].(*ast.ValueSpec).Type == nil ||
-			v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results == nil || len(v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List) == 0 ||
+		if len(v.Specs) == 0 || v.Specs[0] == nil {
+			return
+		}
+		if _, ok := v.Specs[0].(*ast.ValueSpec); !ok || v.Specs[0].(*ast.ValueSpec).Type == nil {
+			return
+		}
+		if _, ok := v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType); !ok || v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results == nil {
+			return
+		}
+		if len(v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List) == 0 ||
 			v.Specs[0].(*ast.ValueSpec).Type.(*ast.FuncType).Results.List[0].Type == nil {
 			return
 		}

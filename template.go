@@ -557,15 +557,13 @@ func (t *template) parse(inputFile string) {
 		}
 	}
 
-	fmt.Println("------", fmt.Sprintf(*outfile+".go", t.Name))
-	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", t.Name), false)
+	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", filename(t.Name)), false)
 
-	if len(testDecls) > 0 {
+	if hasTestFile() && len(testDecls) > 0 {
 		// remove other comments
 		f.Comments = nil
 		f.Decls = testDecls
-		fmt.Println("------", fmt.Sprintf(*outfile+"_test.go", t.Name))
-		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", t.Name), true)
+		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", filename(t.Name)), true)
 	}
 }
 

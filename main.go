@@ -39,6 +39,8 @@ var (
 	verbose = flag.Bool("v", false, "Verbose - print lots of stuff")
 	outfile = flag.String("outfmt", "gotemplate_%v", "the format of the output file; must contain a single instance of the %v verb\n"+
 		"\twhich will be replaced with the template instance name")
+	rawname = flag.Bool("r", false, "raw name, not snake case name")
+	test    = flag.Bool("t", false, "has test file")
 )
 
 // Logging function
@@ -55,6 +57,17 @@ func debugf(format string, args ...interface{}) {
 	if *verbose {
 		logf(format, args...)
 	}
+}
+
+func filename(n string) string {
+	if *rawname {
+		return n
+	}
+	return snakeCase(n)
+}
+
+func hasTestFile() bool {
+	return *test
 }
 
 // usage prints the syntax and exists

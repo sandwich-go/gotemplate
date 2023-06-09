@@ -563,6 +563,7 @@ func (t *template) parse(inputFile string) {
 		// remove other comments
 		f.Comments = nil
 		f.Decls = testDecls
+		fmt.Println("------", fmt.Sprintf(*outfile+"_test.go", t.Name))
 		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", t.Name), true)
 	}
 }

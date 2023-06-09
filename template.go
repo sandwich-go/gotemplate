@@ -557,13 +557,13 @@ func (t *template) parse(inputFile string) {
 		}
 	}
 
-	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", snakeCase(t.Name)), false)
+	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", t.Name), false)
 
 	if len(testDecls) > 0 {
 		// remove other comments
 		f.Comments = nil
 		f.Decls = testDecls
-		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", snakeCase(t.Name)), true)
+		t.rewriteFile(fset, f, fmt.Sprintf(*outfile+"_test.go", t.Name), true)
 	}
 }
 

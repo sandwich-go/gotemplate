@@ -557,6 +557,7 @@ func (t *template) parse(inputFile string) {
 		}
 	}
 
+	fmt.Println("------", fmt.Sprintf(*outfile+".go", t.Name))
 	t.rewriteFile(fset, f, fmt.Sprintf(*outfile+".go", t.Name), false)
 
 	if len(testDecls) > 0 {
